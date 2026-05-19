@@ -56,8 +56,8 @@ button {
   min-height: 40px;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto auto;
-  align-items: center;
+  grid-template-columns: minmax(160px, 1fr) minmax(360px, auto) auto;
+  align-items: start;
   gap: 12px;
   border-radius: 18px;
   padding: 8px 10px;
@@ -68,11 +68,6 @@ button {
   backdrop-filter: blur(16px) saturate(1.2);
   transition: opacity 140ms ease;
   -webkit-app-region: drag;
-}
-
-.app-shell:not([data-click-through='true']) .lyric-window:hover .hover-panel {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .app-shell[data-settings-visible='true']:not([data-click-through='true']) .hover-panel {
@@ -94,6 +89,26 @@ button {
 
 .track-meta {
   min-width: 0;
+}
+
+.track-overlay {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  max-width: min(58vw, 620px);
+  opacity: 0;
+  pointer-events: none;
+  color: #ffffff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.56);
+  transition: opacity 140ms ease;
+}
+
+.app-shell:not([data-click-through='true']) .lyric-window:hover .track-overlay {
+  opacity: 1;
+}
+
+.app-shell[data-settings-visible='true']:not([data-click-through='true']) .track-overlay {
+  opacity: 0;
 }
 
 .track-title,
@@ -119,7 +134,7 @@ button {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: auto auto minmax(150px, 210px);
+  grid-template-columns: auto auto minmax(150px, 210px) minmax(150px, 210px);
   align-items: center;
   gap: 10px;
   -webkit-app-region: no-drag;
@@ -149,6 +164,18 @@ button {
   cursor: pointer;
 }
 
+@media (max-width: 900px) {
+  .hover-panel {
+    grid-template-columns: minmax(160px, 1fr) auto;
+  }
+
+  .settings-grid {
+    grid-column: 1 / -1;
+    justify-self: start;
+    grid-template-columns: auto auto;
+  }
+}
+
 .lock-button {
   flex: 0 0 auto;
   border: 0;
@@ -170,6 +197,48 @@ button {
   overflow: hidden;
   mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
   pointer-events: none;
+}
+
+.transport-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 23px;
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 140ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.transport-button {
+  width: 30px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(18, 18, 24, 0.62);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  padding: 0;
+}
+
+.transport-button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.transport-button:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .lyrics-list {
@@ -214,9 +283,9 @@ button {
 
 .bottom-bar {
   position: absolute;
-  left: 22px;
-  right: 22px;
+  right: 18px;
   bottom: 4px;
+  display: block;
   color: rgba(255, 255, 255, 0.56);
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -231,6 +300,16 @@ button {
 
 .app-shell[data-settings-visible='true']:not([data-click-through='true']) .bottom-bar {
   opacity: 1;
+}
+
+.app-shell:not([data-click-through='true']) .lyric-window:hover .transport-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-shell[data-settings-visible='true']:not([data-click-through='true']) .transport-controls {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .error-line {
@@ -270,7 +349,9 @@ button {
 }
 
 .app-shell[data-click-through='true'] .hover-panel,
+.app-shell[data-click-through='true'] .track-overlay,
 .app-shell[data-click-through='true'] .resize-handle,
+.app-shell[data-click-through='true'] .transport-controls,
 .app-shell[data-click-through='true'] .bottom-bar {
   display: none;
 }

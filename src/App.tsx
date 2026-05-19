@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { fetchLyrics, findActiveLineIndex, getLyricsKey } from './lyrics';
-import { getMediaState, onClickThroughChanged, onSettingsPanelToggle, setClickThrough, setWindowSize } from './desktop';
+import { getMediaState, onClickThroughChanged, onSettingsPanelToggle, setClickThrough, setWindowSize, skipMedia } from './desktop';
 import type { LyricsResult, MediaState } from './types';
 
 const EMPTY_MEDIA: MediaState = {
@@ -14,11 +14,11 @@ const EMPTY_MEDIA: MediaState = {
   sourceAppId: '',
 };
 
-const LYRIC_SYNC_OFFSET_MS = 650;
 const DEFAULT_SETTINGS = {
   activeColor: '#fff6a6',
   inactiveColor: 'rgba(255, 255, 255, 0.34)',
   fontSize: 23,
+  lyricOffsetMs: 650,
   windowWidth: 980,
   windowHeight: 180,
 };
@@ -47,6 +47,18 @@ function formatTime(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function formatLyricOffset(ms: number): string {
+  if (ms > 0) {
+    return `提前 ${ms}ms`;
+  }
+
+  if (ms < 0) {
+    return `延后 ${Math.abs(ms)}ms`;
+  }
+
+  return '同步';
+}
+
 function formatPlaybackStatus(status: MediaState['status']): string {
   if (status === 'playing') {
     return '播放中';
@@ -61,6 +73,24 @@ function formatPlaybackStatus(status: MediaState['status']): string {
   }
 
   return '未知状态';
+}
+
+function SkipPreviousIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M6 5v14" />
+      <path d="m18 6-9 6 9 6V6Z" />
+    </svg>
+  );
+}
+
+function SkipNextIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M18 5v14" />
+      <path d="m6 6 9 6-9 6V6Z" />
+    </svg>
+  );
 }
 
 function App() {
@@ -86,8 +116,8 @@ function App() {
   }, [media.artist, media.title]);
 
   const activeLineIndex = useMemo(() => {
-    return lyrics ? findActiveLineIndex(lyrics.lines, positionMs + LYRIC_SYNC_OFFSET_MS) : -1;
-  }, [lyrics, positionMs]);
+    return lyrics ? findActiveLineIndex(lyrics.lines, positionMs + settings.lyricOffsetMs) : -1;
+  }, [lyrics, positionMs, settings.lyricOffsetMs]);
 
   const updateMedia = useCallback((nextMedia: MediaState) => {
     setMedia(nextMedia);
@@ -119,6 +149,15 @@ function App() {
       localStorage.setItem('display-settings', JSON.stringify(mergedSettings));
       return mergedSettings;
     });
+  }, []);
+
+  const handleSkip = useCallback(async (direction: 'previous' | 'next') => {
+    try {
+      await skipMedia(direction);
+      setLastError('');
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : 'Failed to control media.');
+    }
   }, []);
 
   useEffect(() => {
@@ -173,7 +212,7 @@ function App() {
     let disposed = false;
     setLyricsState('loading');
 
-    fetchLyrics(media.title, media.artist)
+    fetchLyrics(media.title, media.artist, media.durationMs)
       .then((result) => {
         if (disposed) {
           return;
@@ -192,7 +231,7 @@ function App() {
     return () => {
       disposed = true;
     };
-  }, [media.artist, media.title, trackKey]);
+  }, [media.artist, media.durationMs, media.title, trackKey]);
 
   useEffect(() => {
     activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -296,6 +335,11 @@ function App() {
       } as CSSProperties}
     >
       <section className="lyric-window" onDoubleClick={unlockInteraction}>
+        <div className="track-overlay">
+          <div className="track-title">{headline}</div>
+          <div className="track-artist">{subline}</div>
+        </div>
+
         <div className="hover-panel">
           <div className="track-meta">
             <div className="track-title">{headline}</div>
@@ -329,6 +373,17 @@ function App() {
                 onChange={(event) => updateSettings({ fontSize: Number(event.target.value) })}
               />
             </label>
+            <label>
+              {formatLyricOffset(settings.lyricOffsetMs)}
+              <input
+                min="-2000"
+                max="2000"
+                step="50"
+                type="range"
+                value={settings.lyricOffsetMs}
+                onChange={(event) => updateSettings({ lyricOffsetMs: Number(event.target.value) })}
+              />
+            </label>
           </div>
 
           <button className="lock-button" type="button" onClick={toggleClickThrough}>
@@ -356,8 +411,26 @@ function App() {
           )}
         </div>
 
+        <div className="transport-controls">
+          <button
+            aria-label="上一首"
+            className="transport-button"
+            type="button"
+            onClick={() => handleSkip('previous')}
+          >
+            <SkipPreviousIcon />
+          </button>
+          <button
+            aria-label="下一首"
+            className="transport-button"
+            type="button"
+            onClick={() => handleSkip('next')}
+          >
+            <SkipNextIcon />
+          </button>
+        </div>
+
         <div className="bottom-bar">
-          <span>{statusText || formatPlaybackStatus(media.status)}</span>
           <span>{formatTime(positionMs)} / {formatTime(media.durationMs)}</span>
         </div>
 

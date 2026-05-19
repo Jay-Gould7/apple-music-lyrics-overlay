@@ -146,11 +146,11 @@ function createTray() {
   rebuildTrayMenu();
 }
 
-function runPowerShellScript() {
+function runPowerShellScript(action = 'state') {
   return new Promise((resolve, reject) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', mediaScriptPath],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', mediaScriptPath, '-Action', action],
       {
         windowsHide: true,
         cwd: appRoot,
@@ -170,6 +170,21 @@ function runPowerShellScript() {
 
 ipcMain.handle('media:get-state', async () => {
   const raw = await runPowerShellScript();
+  const parsed = JSON.parse(raw || '{}');
+
+  if (parsed.error) {
+    throw new Error(parsed.error);
+  }
+
+  return parsed;
+});
+
+ipcMain.handle('media:skip', async (_event, direction) => {
+  if (direction !== 'previous' && direction !== 'next') {
+    throw new Error('Unsupported media skip direction.');
+  }
+
+  const raw = await runPowerShellScript(direction);
   const parsed = JSON.parse(raw || '{}');
 
   if (parsed.error) {

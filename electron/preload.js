@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('floatingLyrics', {
   getMediaState: () => ipcRenderer.invoke('media:get-state'),
+  skipMedia: (direction) => ipcRenderer.invoke('media:skip', direction),
   setClickThrough: (enabled) => ipcRenderer.invoke('window:set-click-through', enabled),
   setWindowSize: (width, height) => ipcRenderer.invoke('window:set-size', width, height),
   onClickThroughChanged: (listener) => {

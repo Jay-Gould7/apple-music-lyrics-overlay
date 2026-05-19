@@ -1,3 +1,8 @@
+param(
+  [ValidateSet('state', 'previous', 'next')]
+  [string]$Action = 'state'
+)
+
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
@@ -162,6 +167,21 @@ try {
 
   if ($null -eq $session) {
     $empty | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  if ($Action -eq 'previous' -or $Action -eq 'next') {
+    $controlOperation = if ($Action -eq 'previous') {
+      $session.TrySkipPreviousAsync()
+    } else {
+      $session.TrySkipNextAsync()
+    }
+    $succeeded = Await-WinRTTask -Operation $controlOperation -ResultType ([bool])
+
+    [pscustomobject]@{
+      ok = [bool]$succeeded
+      action = $Action
+    } | ConvertTo-Json -Compress
     exit 0
   }
 

@@ -4,6 +4,10 @@ export async function getMediaState(): Promise<MediaState> {
   return window.floatingLyrics.getMediaState();
 }
 
+export async function skipMedia(direction: 'previous' | 'next'): Promise<void> {
+  await window.floatingLyrics.skipMedia(direction);
+}
+
 export async function setClickThrough(enabled: boolean): Promise<void> {
   await window.floatingLyrics.setClickThrough(enabled);
 }
