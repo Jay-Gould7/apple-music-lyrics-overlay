@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { fetchLyrics, findActiveLineIndex, getLyricsKey } from './lyrics';
 import { getMediaState, onClickThroughChanged, onSettingsPanelToggle, setClickThrough, setWindowSize, skipMedia } from './desktop';
+import { convertChineseScript, type ScriptMode } from './chinese';
 import type { LyricsResult, MediaState } from './types';
 
 const EMPTY_MEDIA: MediaState = {
@@ -18,9 +19,43 @@ const DEFAULT_SETTINGS = {
   activeColor: '#fff6a6',
   inactiveColor: 'rgba(255, 255, 255, 0.34)',
   fontSize: 23,
+  fontFamily: 'Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  scriptMode: 'original' as ScriptMode,
   lyricOffsetMs: 650,
   windowWidth: 980,
   windowHeight: 180,
+};
+const POSITION_REWIND_TOLERANCE_MS = 1_500;
+const FONT_OPTIONS = [
+  { label: '系统默认', value: 'Inter, "Segoe UI", "Microsoft JhengHei UI", "Microsoft YaHei UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif' },
+  { label: '微软雅黑', value: '"Microsoft YaHei", "微软雅黑", "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '黑体', value: 'SimHei, "黑体", "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '等线', value: 'DengXian, "等线", "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '宋体', value: 'SimSun, "宋体", PMingLiU, "新細明體", serif' },
+  { label: '楷体', value: 'KaiTi, "楷体", DFKai-SB, "標楷體", serif' },
+  { label: '隶书', value: 'LiSu, "隶书", "Microsoft JhengHei", "微軟正黑體", serif' },
+  { label: '幼圆', value: 'YouYuan, "幼圆", "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '华文行楷', value: 'STXingkai, "华文行楷", KaiTi, DFKai-SB, "標楷體", serif' },
+  { label: '华文琥珀', value: 'STHupo, "华文琥珀", SimHei, "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '华文彩云', value: 'STCaiyun, "华文彩云", SimHei, "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '圆体', value: '"Yu Gothic UI", "Microsoft JhengHei UI", "Microsoft YaHei UI", "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: '霞鹜文楷', value: '"LXGW WenKai", KaiTi, DFKai-SB, "標楷體", serif' },
+  { label: '思源黑体', value: '"Source Han Sans TC", "Noto Sans CJK TC", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft JhengHei", "Microsoft YaHei", sans-serif' },
+  { label: '思源宋体', value: '"Source Han Serif TC", "Noto Serif CJK TC", "Source Han Serif SC", "Noto Serif CJK SC", PMingLiU, SimSun, serif' },
+  { label: 'Comic', value: '"Comic Sans MS", "Comic Sans", YouYuan, "Microsoft JhengHei", "微軟正黑體", cursive' },
+  { label: 'Arial', value: 'Arial, "Microsoft JhengHei", "微軟正黑體", sans-serif' },
+  { label: 'Georgia', value: 'Georgia, PMingLiU, "新細明體", serif' },
+  { label: 'Courier', value: '"Courier New", Consolas, "Microsoft JhengHei", "微軟正黑體", monospace' },
+];
+const SCRIPT_MODE_LABELS: Record<ScriptMode, string> = {
+  original: '原',
+  simplified: '简',
+  traditional: '繁',
+};
+const SCRIPT_MODE_TITLES: Record<ScriptMode, string> = {
+  original: '原文显示',
+  simplified: '转为简体',
+  traditional: '转为繁体',
 };
 
 type DisplaySettings = typeof DEFAULT_SETTINGS;
@@ -93,6 +128,16 @@ function SkipNextIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      <path d="M12 14v2" />
+    </svg>
+  );
+}
+
 function App() {
   const [media, setMedia] = useState<MediaState>(EMPTY_MEDIA);
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
@@ -120,12 +165,27 @@ function App() {
   }, [lyrics, positionMs, settings.lyricOffsetMs]);
 
   const updateMedia = useCallback((nextMedia: MediaState) => {
-    setMedia(nextMedia);
-    mediaRef.current = nextMedia;
+    const currentMedia = mediaRef.current;
+    const currentClock = clockRef.current;
+    const isSameTrack = getLyricsKey(currentMedia.title, currentMedia.artist) === getLyricsKey(nextMedia.title, nextMedia.artist);
+    const projectedPositionMs = currentClock.status === 'playing'
+      ? currentClock.positionMs + performance.now() - currentClock.receivedAt
+      : currentClock.positionMs;
+    const isMinorPlaybackRewind = isSameTrack
+      && nextMedia.status === 'playing'
+      && currentClock.status === 'playing'
+      && nextMedia.positionMs < projectedPositionMs
+      && projectedPositionMs - nextMedia.positionMs <= POSITION_REWIND_TOLERANCE_MS;
+    const stableMedia = isMinorPlaybackRewind
+      ? { ...nextMedia, positionMs: projectedPositionMs }
+      : nextMedia;
+
+    setMedia(stableMedia);
+    mediaRef.current = stableMedia;
     clockRef.current = {
-      positionMs: nextMedia.positionMs,
+      positionMs: stableMedia.positionMs,
       receivedAt: performance.now(),
-      status: nextMedia.status,
+      status: stableMedia.status,
     };
   }, []);
 
@@ -150,6 +210,16 @@ function App() {
       return mergedSettings;
     });
   }, []);
+
+  const toggleScriptMode = useCallback(() => {
+    const nextModeByCurrent: Record<ScriptMode, ScriptMode> = {
+      original: 'simplified',
+      simplified: 'traditional',
+      traditional: 'original',
+    };
+
+    updateSettings({ scriptMode: nextModeByCurrent[settings.scriptMode] });
+  }, [settings.scriptMode, updateSettings]);
 
   const handleSkip = useCallback(async (direction: 'previous' | 'next') => {
     try {
@@ -332,6 +402,7 @@ function App() {
         '--active-lyric-color': settings.activeColor,
         '--inactive-lyric-color': settings.inactiveColor,
         '--lyric-font-size': `${settings.fontSize}px`,
+        '--lyric-font-family': settings.fontFamily,
       } as CSSProperties}
     >
       <section className="lyric-window" onDoubleClick={unlockInteraction}>
@@ -373,6 +444,30 @@ function App() {
                 onChange={(event) => updateSettings({ fontSize: Number(event.target.value) })}
               />
             </label>
+            <div className="setting-control font-setting">
+              <span>字体</span>
+              <select
+                className="font-select"
+                style={{ fontFamily: settings.fontFamily }}
+                value={settings.fontFamily}
+                onChange={(event) => updateSettings({ fontFamily: event.target.value })}
+              >
+                {FONT_OPTIONS.map((fontOption) => (
+                  <option key={fontOption.value} style={{ fontFamily: fontOption.value }} value={fontOption.value}>
+                    {fontOption.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              aria-label={SCRIPT_MODE_TITLES[settings.scriptMode]}
+              className="script-toggle-button"
+              title={SCRIPT_MODE_TITLES[settings.scriptMode]}
+              type="button"
+              onClick={toggleScriptMode}
+            >
+              {SCRIPT_MODE_LABELS[settings.scriptMode]}
+            </button>
             <label>
               {formatLyricOffset(settings.lyricOffsetMs)}
               <input
@@ -386,8 +481,8 @@ function App() {
             </label>
           </div>
 
-          <button className="lock-button" type="button" onClick={toggleClickThrough}>
-            锁定穿透
+          <button aria-label="锁定穿透" className="lock-button" title="锁定穿透" type="button" onClick={toggleClickThrough}>
+            <LockIcon />
           </button>
         </div>
 
@@ -400,13 +495,13 @@ function App() {
                   className={index === activeLineIndex ? 'lyric-line active' : 'lyric-line'}
                   key={`${line.timeMs}-${index}`}
                 >
-                  {line.text || '♪'}
+                  {convertChineseScript(line.text, settings.scriptMode) || '♪'}
                 </div>
               ))}
             </div>
           ) : (
             <div className="fallback-line">
-              <span>{statusText || headline}</span>
+              <span>{convertChineseScript(statusText || headline, settings.scriptMode)}</span>
             </div>
           )}
         </div>
