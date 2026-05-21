@@ -95,6 +95,14 @@ npm run desktop:start
 npm run desktop:build
 ```
 
+## 打包安装程序
+
+```powershell
+npm run desktop:dist
+```
+
+打包后会在 `release` 目录生成 Windows 安装程序，安装后可以直接从桌面或开始菜单双击运行。
+
 ## 使用方式
 
 1. 打开 Apple Music 并播放歌曲。
@@ -182,6 +190,5 @@ Ctrl + Shift + L
 - 支持导入本地 `.lrc` 文件。
 - 支持手动粘贴 LRC 或纯文本歌词。
 - 支持多套显示预设。
-- 支持字体、描边、阴影和行距调整。
+- 支持歌词描边、阴影和行距调整。
 - 支持自动清理错误歌词缓存。
-- 增加打包安装程序，减少命令行使用成本。
